@@ -47,7 +47,7 @@ set(CPACK_COMPONENT_RUNTIME_REQUIRED TRUE )
 target_link_libraries(
   atmi_runtime
   "-Wl,--as-needed"
-  -L${ATMI_DEP_LIBHSA_LIBRARIES_DIRS} -lhsa-runtime64
+  -L${ATMI_DEP_LIBHSA_LIBRARIES_DIRS} -lhsa-runtime64 -lqthread
   )
 
 # set output dir for .h files

@@ -37,11 +37,11 @@ extern _CPPSTRING_ void sum_cpu(int **a_ref, int **b_ref, int **c_ref) {
 }
 
 /*  Recursive Fibonacci */
-extern _CPPSTRING_ void fib_cpu(atmi_task_handle_t *sum_task_ref, 
-                                const int *n_ref, int **result_ref) {
-    atmi_task_handle_t sum_task = *sum_task_ref;
+extern _CPPSTRING_ void fib_cpu(atmi_task_handle_t *sum_task_p, const int *n_ref, int **result_ref) {
     const int n = *n_ref;
     int *result = *result_ref;
+    atmi_task_handle_t sum_task = *sum_task_p;
+    //printf("n: %d\n", n);
     if (n < 5) {
         //*result = n;
         int fib_array[3];
@@ -51,42 +51,49 @@ extern _CPPSTRING_ void fib_cpu(atmi_task_handle_t *sum_task_ref,
         for(; i <= n; i++) {
             fib_array[i % 3] = fib_array[(i - 1) % 3] + fib_array[(i - 2) % 3]; 
         }
-        //printf("I: %d, n: %d\n", i-1, n);
+        printf("I: %d, n: %d\n", i-1, n);
         *result = fib_array[(i-1) % 3];
         ATMI_LPARM(lp);
         lp->kernel_id = CPU_IMPL;
         lp->place = ATMI_PLACE_CPU(0, 0);
         int *null_arg = NULL;
         void *sum_args[] = { &null_arg, &null_arg, &null_arg };
-        atmi_task_activate(sum_task, lp, sum_args);
-        //atmi_task_activate(sum_task, NULL, NULL);
+
+        atmi_task_template_activate(sum_task, lp, sum_args);
+        //atmi_task_handle_t sum_task = atmi_task_create(lp, sum_kernel, sum_args);
+        //atmi_task_activate(sum_task);
     } else {
         ATMI_LPARM(lp1);
         lp1->kernel_id = CPU_IMPL;
         lp1->place = ATMI_PLACE_CPU(0, 0);
-        int *result1 = new int;
-        atmi_task_handle_t task_sum1 = atmi_task_create(sum_kernel);
+	atmi_task_handle_t sum_task1 = atmi_task_template_create(sum_kernel);
         int n1 = n - 1;
-        void *fib_args1[] = { &task_sum1, &n1, &result1 };
+        int *result1 = new int;
+        void *fib_args1[] = { &sum_task1, &n1, &result1 };
+
         ATMI_LPARM(lp2);
         lp2->kernel_id = CPU_IMPL;
         lp2->place = ATMI_PLACE_CPU(0, 0);
-        int *result2 = new int;
-        atmi_task_handle_t task_sum2 = atmi_task_create(sum_kernel);
+	atmi_task_handle_t sum_task2 = atmi_task_template_create(sum_kernel);
         int n2 = n - 2;
-        void *fib_args2[] = { &task_sum2, &n2, &result2 };
+        int *result2 = new int;
+        void *fib_args2[] = { &sum_task2, &n2, &result2 };
 
-        atmi_task_launch(lp1, fib_kernel, fib_args1);
-        atmi_task_launch(lp2, fib_kernel, fib_args2);
+        printf("n:%d n1:%d, n2:%d\n", n, n1, n2);
+
+        atmi_task_handle_t task_fib1 = atmi_task_launch(lp1, fib_kernel, fib_args1);
+        atmi_task_handle_t task_fib2 = atmi_task_launch(lp2, fib_kernel, fib_args2);
 
         ATMI_LPARM(lparm_child);
         lparm_child->kernel_id = CPU_IMPL;
         lparm_child->place = ATMI_PLACE_CPU(0, 0);
-        ATMI_PARM_SET_DEPENDENCIES(lparm_child, task_sum1, task_sum2);
+        ATMI_PARM_SET_DEPENDENCIES(lparm_child, sum_task1, sum_task2);
 
         void *sum_args[] = { &result1, &result2, &result };
-        atmi_task_activate(sum_task, lparm_child, sum_args);
+
+        atmi_task_template_activate(sum_task, lparm_child, sum_args);
     }
+    //printf("done n: %d\n", n);
 }
 
 int main(int argc, char *argv[]) {
@@ -100,7 +107,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "N should be >= 0\n");
         exit(-1);
     }
-    int *result = new int;
+    int *result = new int(0);
 
     size_t fib_arg_sizes[] = { sizeof(atmi_task_handle_t), sizeof(const int), sizeof(int *)};
     const int fib_num_args = sizeof(fib_arg_sizes)/sizeof(fib_arg_sizes[0]);
@@ -112,17 +119,22 @@ int main(int argc, char *argv[]) {
     atmi_kernel_create_empty(&sum_kernel, sum_num_args, sum_arg_sizes);
     atmi_kernel_add_cpu_impl(sum_kernel, (atmi_generic_fp)sum_cpu, CPU_IMPL);
 
-    atmi_task_handle_t root_sum_task_continuation = atmi_task_create(sum_kernel);
-    void *fib_args[fib_num_args] = { &root_sum_task_continuation, &N, &result };
+    atmi_task_handle_t root_sum_task = atmi_task_template_create(sum_kernel);
+
+    void *fib_args[fib_num_args] = { &root_sum_task, &N, &result };
 
     // Time how long it takes to calculate the nth Fibonacci number
     clock_t start = clock();
-#if 1
+#if 1 
     ATMI_LPARM(lp);
     lp->kernel_id = CPU_IMPL;
     lp->place = ATMI_PLACE_CPU(0, 0);
-    atmi_task_handle_t root_sum_task = atmi_task_launch(lp, fib_kernel, fib_args);
-    atmi_task_wait(root_sum_task_continuation);
+
+    atmi_task_handle_t root_fib_task = atmi_task_create(lp, fib_kernel, fib_args);
+    atmi_task_activate(root_fib_task);
+
+    atmi_task_wait(root_sum_task);
+    while(*result == 0){}
 #else
     int fib_array[3];
     int i = 0;

@@ -21,13 +21,18 @@ long int get_nanosecs( struct timespec start_time, struct timespec end_time);
 typedef void* ARG_TYPE;
 #define COMMA ,
 #define REPEAT(name)   COMMA name
-#define REPEAT2(name)  REPEAT(name)   REPEAT(name) 
+#define REPEAT2(name)  REPEAT(name)   REPEAT(name)
 #define REPEAT4(name)  REPEAT2(name)  REPEAT2(name)
 #define REPEAT8(name)  REPEAT4(name)  REPEAT4(name)
 #define REPEAT16(name) REPEAT8(name) REPEAT8(name)
 
 #define ATMI_WAIT_STATE HSA_WAIT_STATE_BLOCKED
 //#define ATMI_WAIT_STATE HSA_WAIT_STATE_ACTIVE
+
+#define USING_QTHREADS
+#ifdef USING_QTHREADS
+#include <qthread/qthread.h>
+#endif
 
 typedef struct atl_kernel_enqueue_args_s {
     char        num_gpu_queues;
@@ -68,8 +73,8 @@ int process_packet(hsa_queue_t *queue, int id);
 
 // ---------------------- Kernel Start -------------
 typedef struct atl_kernel_impl_s {
-    // FIXME: would anyone need to reverse engineer the 
-    // user-specified ID from the impls index? 
+    // FIXME: would anyone need to reverse engineer the
+    // user-specified ID from the impls index?
     unsigned int kernel_id;
     std::string kernel_name;
     atmi_platform_type_t kernel_type;
@@ -83,7 +88,7 @@ typedef struct atl_kernel_impl_s {
     uint32_t *group_segment_sizes;
     uint32_t *private_segment_sizes;
     uint32_t kernarg_segment_size; // differs for CPU vs GPU
-    
+
     /* Kernel argument map */
     pthread_mutex_t mutex; // to lock changes to the free pool
     void *kernarg_region;
@@ -186,14 +191,14 @@ typedef struct atl_task_s {
     bool kernarg_region_copied;
 
     // list of dependents
-    uint32_t num_predecessors; 
-    uint32_t num_successors; 
-    atl_task_type_t type; 
+    uint32_t num_predecessors;
+    uint32_t num_successors;
+    atl_task_type_t type;
 
     void *data_src_ptr;
     void *data_dest_ptr;
     size_t data_size;
-    
+
     atmi_task_group_table_t *stream_obj;
     atmi_task_group_t group;
     boolean groupable;
@@ -335,11 +340,11 @@ if (status != HSA_STATUS_SUCCESS) { \
 #if 0
 #ifdef __cplusplus
 extern "C" {
-#endif 
+#endif
 
-typedef struct hsa_amd_profiling_dispatch_time_s { 
-    uint64_t start; 
-    uint64_t end; 
+typedef struct hsa_amd_profiling_dispatch_time_s {
+    uint64_t start;
+    uint64_t end;
 } hsa_amd_profiling_dispatch_time_t;
 hsa_status_t HSA_API hsa_amd_profiling_set_profiler_enabled(hsa_queue_t* queue, int enable);
 hsa_status_t HSA_API hsa_amd_profiling_get_dispatch_time(
@@ -349,5 +354,5 @@ hsa_status_t HSA_API hsa_amd_profiling_get_dispatch_time(
 #ifdef __cplusplus
 }
 #endif //__cplusplus
-#endif // 0 
+#endif // 0
 #endif //__SNK_INTERNAL

@@ -50,23 +50,23 @@ std::vector<ATLMemory> &ATLProcessor::getMemories() {
     return _memories;
 }
 
-template <> std::vector<ATLCPUProcessor> &ATLMachine::getProcessors() { 
-    return _cpu_processors; 
+template <> std::vector<ATLCPUProcessor> &ATLMachine::getProcessors() {
+    return _cpu_processors;
 }
 
-template <> std::vector<ATLGPUProcessor> &ATLMachine::getProcessors() { 
-    return _gpu_processors; 
+template <> std::vector<ATLGPUProcessor> &ATLMachine::getProcessors() {
+    return _gpu_processors;
 }
 
-template <> std::vector<ATLDSPProcessor> &ATLMachine::getProcessors() { 
-    return _dsp_processors; 
+template <> std::vector<ATLDSPProcessor> &ATLMachine::getProcessors() {
+    return _dsp_processors;
 }
 
 hsa_amd_memory_pool_t get_memory_pool(ATLProcessor &proc, const int mem_id) {
     hsa_amd_memory_pool_t pool;
     vector<ATLMemory> &mems = proc.getMemories();
     assert(mems.size() && mem_id >=0 && mem_id < mems.size() && "Invalid memory pools for this processor");
-    pool = mems[mem_id].getMemory(); 
+    pool = mems[mem_id].getMemory();
     return pool;
 }
 
@@ -96,7 +96,7 @@ void ATLGPUProcessor::createQueues(const int count) {
         hsa_queue_t *this_Q;
         err=hsa_queue_create(_agent, queue_size, HSA_QUEUE_TYPE_MULTI, NULL, NULL, UINT32_MAX, UINT32_MAX, &this_Q);
         ErrorCheck(Creating the queue, err);
-        err = hsa_amd_profiling_set_profiler_enabled(this_Q, 1); 
+        err = hsa_amd_profiling_set_profiler_enabled(this_Q, 1);
         ErrorCheck(Enabling profiling support, err);
         _queues.push_back(this_Q);
         DEBUG_PRINT("Queue[%d]: %p\n", qid, this_Q);
@@ -104,7 +104,7 @@ void ATLGPUProcessor::createQueues(const int count) {
 }
 
 agent_t *ATLCPUProcessor::getThreadAgent(const int index) {
-    if(index < 0 || index >= _agents.size()) 
+    if(index < 0 || index >= _agents.size())
         DEBUG_PRINT("CPU Agent index out of bounds!\n");
     return _agents[index];
 }
@@ -122,9 +122,25 @@ hsa_signal_t *ATLCPUProcessor::get_worker_sig(hsa_queue_t *q) {
 }
 
 void *agent_worker(void *agent_args);
+#ifdef USING_QTHREADS
+long unsigned int agent_worker_q(void *agent_args);
+#endif
 
 void ATLCPUProcessor::createQueues(const int count) {
     hsa_status_t err;
+
+#ifdef USING_QTHREADS
+    static bool do_once = true;
+    if(do_once)
+    {
+        int status;
+        status = qthread_initialize();
+        assert(status == QTHREAD_SUCCESS);
+        do_once = false;
+    }
+    //int num_shepherds = qthread_num_shepherds();
+#endif
+
     for(int qid = 0; qid < count; qid++) {
         agent_t *agent = new agent_t;
         agent->id = qid;
@@ -139,9 +155,9 @@ void ATLCPUProcessor::createQueues(const int count) {
         hsa_queue_t *this_Q;
         const int capacity = 1024 * 1024;
         hsa_amd_memory_pool_t cpu_pool = get_memory_pool(*this, 0);
-        // FIXME: How to convert hsa_amd_memory_pool_t to hsa_region_t? 
+        // FIXME: How to convert hsa_amd_memory_pool_t to hsa_region_t?
         // Using fine grained system memory REGION for now
-        err = hsa_soft_queue_create(atl_cpu_kernarg_region, capacity, 
+        err = hsa_soft_queue_create(atl_cpu_kernarg_region, capacity,
                 HSA_QUEUE_TYPE_SINGLE,
                 HSA_QUEUE_FEATURE_AGENT_DISPATCH, db_signal, &this_Q);
         ErrorCheck(Creating an agent queue, err);
@@ -149,18 +165,23 @@ void ATLCPUProcessor::createQueues(const int count) {
         agent->queue = this_Q;
 
         hsa_queue_t *q = this_Q;
-        //err = hsa_ext_set_profiling( q, 1); 
-        //check(Enabling CPU profiling support, err); 
+        //err = hsa_ext_set_profiling( q, 1);
+        //check(Enabling CPU profiling support, err);
         //profiling does not work for CPU queues
-        /* FIXME: Looks like a HSA bug. The doorbell signal that we pass to the 
-         * soft queue creation API never seems to be set. Workaround is to 
+        /* FIXME: Looks like a HSA bug. The doorbell signal that we pass to the
+         * soft queue creation API never seems to be set. Workaround is to
          * manually set it again like below.
          */
         q->doorbell_signal = db_signal;
         _agents.push_back(agent);
         int last_index = _agents.size() - 1;
-        pthread_create(&(agent->thread), NULL, 
+
+#ifdef USING_QTHREADS
+        qthread_fork(agent_worker_q, agent, NULL);
+#else
+        pthread_create(&(agent->thread), NULL,
                     agent_worker, (void *)agent);
+#endif
     }
 }
 

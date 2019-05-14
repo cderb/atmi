@@ -320,6 +320,7 @@ extern void atl_task_wait(atl_task_t *task) {
 }
 
 extern atmi_status_t atmi_task_wait(atmi_task_handle_t task) {
+    printf("Waiting for task\n");
     DEBUG_PRINT("Waiting for task ID: %lu\n", task);
     atl_task_wait(get_task(task));
     return ATMI_STATUS_SUCCESS;
