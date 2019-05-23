@@ -32,6 +32,7 @@ typedef void* ARG_TYPE;
 #define USING_QTHREADS
 #ifdef USING_QTHREADS
 #include <qthread/qthread.h>
+static aligned_t mutex_qthread_lock;
 #endif
 
 typedef struct atl_kernel_enqueue_args_s {

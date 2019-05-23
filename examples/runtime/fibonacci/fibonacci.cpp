@@ -29,10 +29,18 @@ extern _CPPSTRING_ void sum_cpu(int **a_ref, int **b_ref, int **c_ref) {
     int *a = *a_ref;
     int *b = *b_ref;
     int *c = *c_ref;
+
     if(a && b && c) {
         *c = *a + *b;
+
+        //printf("pt:0x%lx sum %i = %i + %i\n", pthread_self(), *c, *a, *b);
+
         delete a;
         delete b;
+    }
+    else
+    {
+        //printf("pt:0x%lx sum null\n", pthread_self());
     }
 }
 
@@ -41,7 +49,7 @@ extern _CPPSTRING_ void fib_cpu(atmi_task_handle_t *sum_task_p, const int *n_ref
     const int n = *n_ref;
     int *result = *result_ref;
     atmi_task_handle_t sum_task = *sum_task_p;
-    //printf("n: %d\n", n);
+    //printf("pt:0x%lx --> %lu _ %u\n", pthread_self(), sum_task, n);
     if (n < 5) {
         //*result = n;
         int fib_array[3];
@@ -51,7 +59,6 @@ extern _CPPSTRING_ void fib_cpu(atmi_task_handle_t *sum_task_p, const int *n_ref
         for(; i <= n; i++) {
             fib_array[i % 3] = fib_array[(i - 1) % 3] + fib_array[(i - 2) % 3]; 
         }
-        printf("I: %d, n: %d\n", i-1, n);
         *result = fib_array[(i-1) % 3];
         ATMI_LPARM(lp);
         lp->kernel_id = CPU_IMPL;
@@ -60,8 +67,6 @@ extern _CPPSTRING_ void fib_cpu(atmi_task_handle_t *sum_task_p, const int *n_ref
         void *sum_args[] = { &null_arg, &null_arg, &null_arg };
 
         atmi_task_template_activate(sum_task, lp, sum_args);
-        //atmi_task_handle_t sum_task = atmi_task_create(lp, sum_kernel, sum_args);
-        //atmi_task_activate(sum_task);
     } else {
         ATMI_LPARM(lp1);
         lp1->kernel_id = CPU_IMPL;
@@ -79,7 +84,7 @@ extern _CPPSTRING_ void fib_cpu(atmi_task_handle_t *sum_task_p, const int *n_ref
         int *result2 = new int;
         void *fib_args2[] = { &sum_task2, &n2, &result2 };
 
-        printf("n:%d n1:%d, n2:%d\n", n, n1, n2);
+        //printf("tsk:n %lu:%d %lu:%d, %lu:%d\n", sum_task, n, sum_task1, n1, sum_task2, n2);
 
         atmi_task_handle_t task_fib1 = atmi_task_launch(lp1, fib_kernel, fib_args1);
         atmi_task_handle_t task_fib2 = atmi_task_launch(lp2, fib_kernel, fib_args2);
@@ -87,19 +92,19 @@ extern _CPPSTRING_ void fib_cpu(atmi_task_handle_t *sum_task_p, const int *n_ref
         ATMI_LPARM(lparm_child);
         lparm_child->kernel_id = CPU_IMPL;
         lparm_child->place = ATMI_PLACE_CPU(0, 0);
+
         ATMI_PARM_SET_DEPENDENCIES(lparm_child, sum_task1, sum_task2);
 
         void *sum_args[] = { &result1, &result2, &result };
 
         atmi_task_template_activate(sum_task, lparm_child, sum_args);
     }
-    //printf("done n: %d\n", n);
 }
 
 int main(int argc, char *argv[]) {
     atmi_status_t err = atmi_init(ATMI_DEVTYPE_ALL);
     if(err != ATMI_STATUS_SUCCESS) return -1;
-    int N = 10;
+    int N = 7;
     if(argc > 1) {
         N = atoi(argv[1]);
     }
@@ -134,7 +139,6 @@ int main(int argc, char *argv[]) {
     atmi_task_activate(root_fib_task);
 
     atmi_task_wait(root_sum_task);
-    while(*result == 0){}
 #else
     int fib_array[3];
     int i = 0;
@@ -155,6 +159,9 @@ int main(int argc, char *argv[]) {
             duration);
 
     delete result;
+
+    atmi_finalize();
+
     return 0;
 }
 

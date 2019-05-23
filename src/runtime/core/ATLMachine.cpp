@@ -123,7 +123,7 @@ hsa_signal_t *ATLCPUProcessor::get_worker_sig(hsa_queue_t *q) {
 
 void *agent_worker(void *agent_args);
 #ifdef USING_QTHREADS
-long unsigned int agent_worker_q(void *agent_args);
+aligned_t agent_worker_q(void *agent_args);
 #endif
 
 void ATLCPUProcessor::createQueues(const int count) {
@@ -134,9 +134,14 @@ void ATLCPUProcessor::createQueues(const int count) {
     if(do_once)
     {
         int status;
+        setenv("QTHREAD_STACK_SIZE", "1048576", 0);
+        //setenv("QTHREAD_TASKLOCAL_SIZE", "1048576", 0);
+        //setenv("QTHREAD_ARGCOPY_SIZE", "1048576", 0);
         status = qthread_initialize();
         assert(status == QTHREAD_SUCCESS);
         do_once = false;
+
+        qthread_unlock(&mutex_qthread_lock);
     }
     //int num_shepherds = qthread_num_shepherds();
 #endif
@@ -177,7 +182,11 @@ void ATLCPUProcessor::createQueues(const int count) {
         int last_index = _agents.size() - 1;
 
 #ifdef USING_QTHREADS
-        qthread_fork(agent_worker_q, agent, NULL);
+        int err;
+        err = qthread_fork(agent_worker_q, (void *)agent, NULL);
+        assert(err == 0);
+	//usleep(1);
+        //pthread_create(&(agent->thread), NULL, agent_worker, (void *)agent);
 #else
         pthread_create(&(agent->thread), NULL,
                     agent_worker, (void *)agent);

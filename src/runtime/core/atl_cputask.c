@@ -37,7 +37,7 @@ struct pthreadComparator {
          * false: left is greater than right
          * true: left is less than or equal to right
          */
-        DEBUG_PRINT("Comparing %lu %lu\n", left, right);
+        //DEBUG_PRINT("Comparing %lu %lu\n", left, right);
         int i;
         pthcmp_t L, R;
         L.pth = left;
@@ -45,11 +45,11 @@ struct pthreadComparator {
         for (i = 0; i < sizeof(pthread_t); i++)
         {
             if (L.b[i] > R.b[i]) {
-                DEBUG_PRINT("False because %d > %d\n", L.b[i], R.b[i]);
+                //DEBUG_PRINT("False because %d > %d\n", L.b[i], R.b[i]);
                 return false;
             }
             else if (L.b[i] < R.b[i]) {
-                DEBUG_PRINT("True because %d > %d\n", L.b[i], R.b[i]);
+                //DEBUG_PRINT("True because %d > %d\n", L.b[i], R.b[i]);
                 return true;
             }
         }
@@ -746,14 +746,6 @@ int process_queue(agent_t *agent)
     return 0;
 }
 
-#ifdef USING_QTHREADS
-long unsigned int agent_worker_q(void *agent_args)
-{
-    agent_worker(agent_args);
-    return 0;
-}
-#endif
-
 #if 0
 typedef struct thread_args_s {
     int tid;
@@ -804,6 +796,7 @@ void *agent_worker(void *agent_args) {
     int set_core = (num_cpus - 1 - (1 * agent->id)) % num_cpus;
     DEBUG_PRINT("Setting on CPU core: %d / %d\n", set_core, num_cpus);
     set_thread_affinity(set_core);
+
 #if defined (ATMI_HAVE_PROFILE)
     atmi_profiling_agent_init(agent->id);
 #endif /* ATMI_HAVE_PROFILE */
@@ -823,6 +816,7 @@ void *agent_worker(void *agent_args) {
         if (PROCESS_PKT == hsa_signal_cas_acq_rel(agent->worker_sig,
                     PROCESS_PKT, IDLE) ) {
             if (!process_queue(agent)) continue;
+
         }
         sig_value = IDLE;
     }
@@ -833,6 +827,18 @@ void *agent_worker(void *agent_args) {
 #endif /*ATMI_HAVE_PROFILE */
     return NULL;
 }
+
+
+#ifdef USING_QTHREADS
+aligned_t agent_worker_q(void *agent_args)
+{
+    agent_t *agent = (agent_t*)agent_args;
+    agent->thread = pthread_self();
+    agent_worker(agent_args);
+    return 0;
+}
+#endif
+
 #endif
 void
 cpu_agent_init(int cpu_id, const size_t num_queues) {
